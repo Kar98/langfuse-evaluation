@@ -29,27 +29,6 @@ def get_api_key():
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     return api_key
 
-def initialize_langfuse():
-    """Initializes the Langfuse client."""
-    if not (LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY):
-        print("\n[Langfuse Warning] Keys not found. Tracing will be skipped.")
-        print("Please set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY environment variables.")
-        return None
-    
-    try:
-        # Initializing the client. flush_at=1 ensures the trace is sent immediately.
-        lf = Langfuse(
-            public_key=LANGFUSE_PUBLIC_KEY, 
-            secret_key=LANGFUSE_SECRET_KEY, 
-            host=LANGFUSE_HOST,
-            flush_at=1 
-        )
-        print(f"[Langfuse] Client initialized. Host: {LANGFUSE_HOST}")
-        return lf
-    except Exception as e:
-        print(f"[Langfuse Error] Could not initialize Langfuse client. Details: {e}")
-        return None
-
 @observe()
 def main():
     """Initializes the client and requests content from the Gemini API, with Langfuse tracing."""
@@ -68,7 +47,6 @@ def main():
         sys.exit(1)
 
     # 3. Initialize Langfuse
-    #langfuse = initialize_langfuse()
     
     print(f"Model: {MODEL_NAME}")
     
@@ -77,7 +55,7 @@ def main():
     print("Enter your prompt (or press Enter to use the default prompt):")
     
     user_input = input("Prompt > ")
-    prompt = user_input.strip() if user_input.strip() else DEFAULT_PROMPT
+    prompt = user_input.strip()
     
     print(f"\nSending prompt to model...")
     print(f"Prompt: '{prompt}'")
@@ -129,5 +107,8 @@ def main():
             langfuse.flush()
             print("Trace sent successfully to Langfuse.")
 
+    return user_input, response.text
+
 if __name__ == "__main__":
     main()
+    

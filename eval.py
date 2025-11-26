@@ -1,8 +1,12 @@
 import sys
+import json
 from google import genai
 from google.genai.errors import APIError
 from langfuse import Langfuse, get_client, observe, Evaluation
 from langfuse.experiment import LocalExperimentItem
+from typing import Dict
+from google.genai import types
+from PIL import Image
 
 langfuse = get_client()
 if langfuse.auth_check():
@@ -15,45 +19,82 @@ MODEL_NAME = ["gemini-2.5-flash", "gemini-2.5-pro"]
 
 
 def task(*, item, **_):
-    print(f'item.input is {item["input"]}')
+    print("start task")
+    filename = 'img/'+item["input"]
+    cropname = 'img/'+item["input"].replace(".jpg", "-cropped.jpg")
+    with open(filename, 'rb') as f:
+        image_bytes = f.read()
+
     client = genai.Client()
     response = client.models.generate_content(
-            model=item["input"],
-            contents=f'echo back the text: {item["input"]}',
-        )
-    
+        model="gemini-2.5-flash",
+        contents=["In this image I only want the 2 women shown. Give me the coordinates to be able to crop the 2 women's faces. Return the crop format as a JSON object. Only return a single set of coordinates"
+        "This is the JSON object in python notation: class Coords(TypedDict): left: int top: int right: int bottom: int", types.Part.from_bytes(
+            data=image_bytes,
+            mime_type='image/jpeg',
+        )],
+    )
 
-    print(f'gemini returned the following {response.text}')
-    return response.text
+    start = response.text.find("{")
+    end = response.text.find("}")+1
+
+    trimmed = response.text[start:end]
+    jsonData = json.loads(trimmed)
+    print(jsonData)
+
+    image1 = Image.open(filename)
+    cropped = image1.crop((jsonData["left"], jsonData["top"], jsonData["right"], jsonData["bottom"]))
+    cropped.save(cropname)
+    return cropname
 
 def accuracy_eval(*, input, output, expected_output, **_):
-    ok = expected_output.lower() in output.lower()
-    # kick off lambda
+    print(f"input is: {input}")
+    print(f"output is: {output}")
+    print(f"expected_output is: {expected_output}")
 
-    # lambda is complete
+    with open(output, 'rb') as f:
+        image_bytes = f.read()
+    
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=["From this image, can you see only 2 women's faces clearly? If it's not clear or there are less than 2 women, or more than 2 people (women or man) then return false."
+        "Only return a simple true or false. If the criteria is invalid, then return invalid.", types.Part.from_bytes(
+            data=image_bytes,
+            mime_type='image/jpeg',
+        )],
+    )
 
-    # grab lambda results
+    
+    retValue = response.text
+    if len(response.text) > 7:
+        print("an error occurred")
+        print(response.text)
+        retValue = "ERROR"
 
-    return Evaluation(name="accuracy", value=1.0 if ok else 0.0)
+    print("retValue")
+    print(retValue)
+    return Evaluation(name="passed", value=retValue)
 
-# Experiment runner iterates dataset items, traces calls, and applies evaluators
-localExpData: LocalExperimentItem = [{
-            "input": MODEL_NAME[0],
-            "expected_output": "gemini-2.5-flash",
-            "metadata": {"difficulty": "low", "category": "test"}
-        },
-        {
-            "input": MODEL_NAME[1],
-            "expected_output": "gemini-2.5-pro",
-            "metadata": {"difficulty": "low", "category": "test"}
-        }]
+@observe()
+def main():
+    # Experiment runner iterates dataset items, traces calls, and applies evaluators
+    localExpData: LocalExperimentItem = [{
+        "input": "abba.jpg",
+        "expected_output": "true",
+        "metadata": {"difficulty": "low", "category": "image-testing", "band": "abba"}
+    }]
 
-print("start experiment")
-result = langfuse.run_experiment(
-    name="Rory test echoing",
-    data=localExpData,
-    task=task,
-    evaluators=[accuracy_eval],
-)
+    print("start experiment")
+    #mtd: Dict[str, str] = {"difficulty": "low", "category": "image-testing"}
+    result = langfuse.run_experiment(
+        name="image cropping test",
+        data=localExpData,
+        task=task,
+        evaluators=[accuracy_eval],
+    )
 
-print(result.format())
+    print(result.format())
+
+if __name__ == "__main__":
+    main()
