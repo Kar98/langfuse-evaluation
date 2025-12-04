@@ -12,3 +12,6 @@ requirements.txt
 
 # User files
 img/*
+
+# Python
+__pycache__/

@@ -1,21 +1,10 @@
 import requests
 import json
 import os
-import base64
+from funcs import login, init
 
-baseurl = os.getenv("LANGFUSE_BASE_URL")
-if not baseurl:
-    raise ValueError("LANGFUSE_BASE_URL needs to be set")
-
-pubkey = os.getenv("LANGFUSE_PUBLIC_KEY")
-if not baseurl:
-    raise ValueError("LANGFUSE_PUBLIC_KEY needs to be set")
-
-secret = os.getenv("LANGFUSE_SECRET_KEY")
-if not baseurl:
-    raise ValueError("LANGFUSE_SECRET_KEY needs to be set")
-
-auth = "Basic "+base64.b64encode(f"{pubkey}:{secret}".encode("utf-8")).decode()
+auth = ""
+baseurl = ""
 
 def main():
     # Create scores
@@ -44,7 +33,6 @@ def main():
     }
     createAnnotationQueue(queues)
 
-
 def createScoreConfig(bodyData: dict):
     path = f"{baseurl}/api/public/score-configs"
     payload = json.dumps(bodyData)
@@ -69,5 +57,7 @@ def createAnnotationQueue(bodyData: dict):
         raise RuntimeError("status code was not 200", "statusCode", score.status_code, "response",score.text)
 
 if __name__ == "__main__":
+    baseurl, pubkey, secret = init()
+    auth = login(pubkey, secret)
     main()
     print('done setup')

@@ -1,53 +1,83 @@
 import sys
-import json
-from google import genai
-from google.genai.errors import APIError
-from langfuse import Langfuse, get_client, observe, Evaluation
-from langfuse.experiment import LocalExperimentItem
-from langfuse.media import LangfuseMedia
-from typing import Dict
-from google.genai import types
-from PIL import Image
 import base64
+import json
+import requests
+from google import genai
+from langfuse import get_client, Langfuse
+from langfuse.media import LangfuseMedia
+from google.genai import types
 
-langfuse = get_client()
-if langfuse.auth_check():
-    print("Langfuse client is authenticated and ready!")
-else:
-    print("Authentication failed. Please check your credentials and host.")
-    sys.exit(1)
+from funcs import login, init
+
+# Set in init()
+auth = ""
+baseurl = ""
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
+#unused
+def prompt(image_bytes):
+    client = genai.Client()
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=["In this image I only want the 2 women shown. If there are already only 2 women, then do not crop the image and simply return the coordinates of the entire image"
+        "Otherwise, give me the coordinates to be able to crop the 2 women's faces. Return the crop format as a JSON object. Only return a single set of coordinates"
+        "This is the JSON object in python notation: class Coords(TypedDict): left: int top: int right: int bottom: int", types.Part.from_bytes(
+            data=image_bytes,
+            mime_type='image/jpeg',
+        )])
+    print(response)
+
+# Adds a trace to the queue and returns the ID
+def addToQueue(queueId, traceId: str):
+    url = f"{baseurl}/api/public/annotation-queues/{queueId}/items"
+
+    payload = json.dumps({
+    "objectId": traceId,
+    "objectType": "TRACE",
+    "status": "PENDING"
+    })
+    headers = {
+    'Content-Type': 'application/json',
+    'Authorization': auth
+    }
+
+    response = requests.request("POST", url, headers=headers, data=payload)
+    if response.status_code > 300:
+        raise RuntimeError("status code was not 200", "statusCode", response.status_code, "error", response.text)
+    return response.json()["id"]
+
 def main():
-    with langfuse.start_as_current_observation(as_type="span", name="image-crop") as span:
-        
-        client = genai.Client()
-        filename = 'img/abba.jpg'
+    langfuse = get_client()
+    bucketId = "kablamo-labs-sandbox-langfuse-bucket"
+    projectId = "cmip9nhcs0006pf07htpiovfd"
+    filename = 'img/abba.jpg'
+    if langfuse.auth_check():
+        print("Langfuse client is authenticated and ready!")
+    else:
+        print("Authentication failed. Please check your credentials and host.")
+        sys.exit(1)
+    
+    with langfuse.start_as_current_observation(as_type="span", name="image-crop") as span:    
         with open(filename, 'rb') as f:
             image_bytes = f.read()
-        
-        image_b64 = encode_image("img/abba.jpg")
-        file_as_bytes = base64.b64encode(image_bytes)
+
         media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
 
-        source = "![Alt text](https://storage.googleapis.com/kablamo-labs-sandbox-langfuse-bucket/media/cmip9nhcs0006pf07htpiovfd/YieRbTlzXvLVkcFXgsceu5.jpeg)"
+        # using alt text will make it be able to be loaded inline
+        source = f"![image](https://storage.googleapis.com/{bucketId}/media/{projectId}/{media._media_id}.jpeg)"
 
-        span.update(input=source,output="here is an output")
-        # response = client.models.generate_content(
-        #     model="gemini-2.5-flash",
-        #     contents=["In this image I only want the 2 women shown. If there are already only 2 women, then do not crop the image and simply return the coordinates of the entire image"
-        #     "Otherwise, give me the coordinates to be able to crop the 2 women's faces. Return the crop format as a JSON object. Only return a single set of coordinates"
-        #     "This is the JSON object in python notation: class Coords(TypedDict): left: int top: int right: int bottom: int", types.Part.from_bytes(
-        #         data=image_bytes,
-        #         mime_type='image/jpeg',
-        #     )])
-        return source
-    langfuse.flush()
+        span.update(input=media,output=source)
 
-    
+        # Add trace to the queue
+        queueId = "cmiqo5ad4000pmp07hd7ewg2t"
+        addToQueue(queueId, span.trace_id)
+
+    return source
 
 if __name__ == "__main__":
+    baseurl, pubkey, secret = init()
+    auth = login(pubkey, secret)
     main()
