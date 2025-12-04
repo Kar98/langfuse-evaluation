@@ -20,15 +20,16 @@ MODEL_NAME = ["gemini-2.5-flash", "gemini-2.5-pro"]
 
 def task(*, item, **_):
     print("start task")
-    filename = 'img/'+item["input"]
-    cropname = 'img/'+item["input"].replace(".jpg", "-cropped.jpg")
+    filename = 'img/'+item["input"] #abba.jpg
+    cropname = 'img/'+item["input"].replace(".jpg", "-cropped.jpg") #abba-cropped.jpg
     with open(filename, 'rb') as f:
         image_bytes = f.read()
 
     client = genai.Client()
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=["In this image I only want the 2 women shown. Give me the coordinates to be able to crop the 2 women's faces. Return the crop format as a JSON object. Only return a single set of coordinates"
+        contents=["In this image I only want the 2 women shown. If there are already only 2 women, then do not crop the image and simply return the coordinates of the entire image"
+        "Otherwise, give me the coordinates to be able to crop the 2 women's faces. Return the crop format as a JSON object. Only return a single set of coordinates"
         "This is the JSON object in python notation: class Coords(TypedDict): left: int top: int right: int bottom: int", types.Part.from_bytes(
             data=image_bytes,
             mime_type='image/jpeg',
@@ -82,16 +83,21 @@ def main():
     localExpData: LocalExperimentItem = [{
         "input": "abba.jpg",
         "expected_output": "true",
-        "metadata": {"difficulty": "low", "category": "image-testing", "band": "abba"}
+        "metadata": {"difficulty": "low", "category": "image-testing", "band": "abba", "manual": "false"}
+    },
+    {
+        "input": "abba-manualcrop.jpg",
+        "expected_output": "true",
+        "metadata": {"difficulty": "low", "category": "image-testing", "band": "abba", "manual": "true"}
     }]
 
     print("start experiment")
-    #mtd: Dict[str, str] = {"difficulty": "low", "category": "image-testing"}
     result = langfuse.run_experiment(
         name="image cropping test",
         data=localExpData,
         task=task,
         evaluators=[accuracy_eval],
+        metadata={"difficulty": "low", "category": "image-testing"}
     )
 
     print(result.format())

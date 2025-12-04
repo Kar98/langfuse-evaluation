@@ -1,8 +1,10 @@
 import os
 import sys
+from langfuse.media import LangfuseMedia
 from google import genai
 from google.genai.errors import APIError
 from langfuse import Langfuse, get_client, observe
+from google.genai import types
 
 # --- Configuration ---
 # Set your API key as an environment variable (e.g., GEMINI_API_KEY or GOOGLE_API_KEY).
@@ -61,12 +63,17 @@ def main():
     print(f"Prompt: '{prompt}'")
     
     generation = None
+
+    with open('img/abba.jpg', 'rb') as f:
+      image_bytes = f.read()
+
     
     # 5. Call the Gemini API, wrapped in a Langfuse trace
+    media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
-            contents=prompt,
+            contents=[types.Part.from_bytes(data=image_bytes,mime_type='image/jpeg'), "Which band is this?"],
         )
         
 
@@ -107,7 +114,7 @@ def main():
             langfuse.flush()
             print("Trace sent successfully to Langfuse.")
 
-    return user_input, response.text
+    return media, response.text
 
 if __name__ == "__main__":
     main()

@@ -1,12 +1,14 @@
 # Env files/secrets
 .env
 .envrc
+.env.cloud
 
 # Repo ignores
 langfuse-env/
 .venv/
 test.py
 testprompt.py
+requirements.txt
 
 # User files
 img/*
