@@ -12,6 +12,8 @@ requirements.txt
 
 # User files
 img/*
+!img/abba.jpg
+.DS_Store
 
 # Python
 __pycache__/

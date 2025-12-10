@@ -1,4 +1,5 @@
 import sys
+import os
 import base64
 import json
 import requests
@@ -14,6 +15,8 @@ auth = ""
 baseurl = ""
 
 def encode_image(image_path):
+    if not os.path.exists(image_path):
+        raise RuntimeError(f"filepath doesn't exist: {image_path}")
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
