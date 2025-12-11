@@ -7,7 +7,7 @@ from google import genai
 from langfuse import get_client, Langfuse
 from langfuse.media import LangfuseMedia
 from google.genai import types
-
+from PIL import Image
 from funcs import login, init
 
 # Set in init()
@@ -21,7 +21,7 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
 #unused
-def prompt(image_bytes):
+def promptWithImage(image_bytes):
     client = genai.Client()
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -31,7 +31,7 @@ def prompt(image_bytes):
             data=image_bytes,
             mime_type='image/jpeg',
         )])
-    print(response)
+    return response
 
 # Adds a trace to the queue and returns the ID
 def addToQueue(queueId, traceId: str):
@@ -56,7 +56,7 @@ def main():
     langfuse = get_client()
     bucketId = "kablamo-labs-sandbox-langfuse-bucket"
     projectId = "cmip9nhcs0006pf07htpiovfd"
-    filename = 'img/abba.jpg'
+    imgFilepath = 'img/abba.jpg'
     if langfuse.auth_check():
         print("Langfuse client is authenticated and ready!")
     else:
@@ -64,16 +64,37 @@ def main():
         sys.exit(1)
     
     with langfuse.start_as_current_observation(as_type="span", name="image-crop") as span:    
-        with open(filename, 'rb') as f:
+        with open(imgFilepath, 'rb') as f:
             image_bytes = f.read()
 
         media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
 
         # using alt text will make it be able to be loaded inline
         source = f"![image](https://storage.googleapis.com/{bucketId}/media/{projectId}/{media._media_id}.jpeg)"
-
-        span.update(input=media,output=source)
-
+        
+        # Send image prompt
+        # left: int top: int right: int bottom: int
+        promptRes = promptWithImage(image_bytes)
+        try:
+            promptJson = json.loads(promptRes.text)
+            print(promptJson)
+            left = promptJson["left"]
+            top = promptJson["top"]
+            right = promptJson["right"]
+            bottom = promptJson["bottom"]
+            #Image.frombytes()
+            img = Image.open(imgFilepath)
+            croppedImg = img.crop(left, top, right, bottom)
+            croppedBytes = croppedImg.tobytes()
+            croppedLfMedia = LangfuseMedia(content_bytes=croppedBytes, content_type="image/jpeg")
+            cropSource = f"![image](https://storage.googleapis.com/{bucketId}/media/{projectId}/{croppedLfMedia._media_id}.jpeg)"
+            span.update(input=source,output=cropSource)
+        except:
+            print("could not crop image")
+            print(promptJson)
+            span.update(input=media,output="error occurred")
+        
+        
         # Add trace to the queue
         queueId = "cmiqo5ad4000pmp07hd7ewg2t"
         addToQueue(queueId, span.trace_id)
