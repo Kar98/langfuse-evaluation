@@ -8,7 +8,7 @@ from langfuse import get_client, Langfuse
 from langfuse.media import LangfuseMedia
 from google.genai import types
 from PIL import Image
-from funcs import login, init
+from funcs import login, init, uploadImage
 
 # Set in init()
 auth = ""
@@ -75,8 +75,14 @@ def main():
         # Send image prompt
         # left: int top: int right: int bottom: int
         promptRes = promptWithImage(image_bytes)
+        print(promptRes.text)
         try:
-            promptJson = json.loads(promptRes.text)
+            #trim
+            start = promptRes.text.find("{")
+            end = promptRes.text.find("}")+1
+            trimmed = promptRes.text[start:end]
+            # Get details
+            promptJson = json.loads(trimmed)
             print(promptJson)
             left = promptJson["left"]
             top = promptJson["top"]
@@ -84,12 +90,18 @@ def main():
             bottom = promptJson["bottom"]
             #Image.frombytes()
             img = Image.open(imgFilepath)
-            croppedImg = img.crop(left, top, right, bottom)
-            croppedBytes = croppedImg.tobytes()
-            croppedLfMedia = LangfuseMedia(content_bytes=croppedBytes, content_type="image/jpeg")
+            croppedImg = img.crop((left, top, right, bottom))
+            croppedName = "img/cropped.jpg"
+            croppedImg.save(croppedName)
+            # with open(croppedName, 'rb') as f:
+            #     croppedImgBytes = f.read()
+            # #croppedBytes = croppedImg.tobytes()
+            # croppedLfMedia = LangfuseMedia(content_bytes=croppedImgBytes, content_type="image/jpeg")
+            croppedLfMedia = uploadImage(croppedName)
             cropSource = f"![image](https://storage.googleapis.com/{bucketId}/media/{projectId}/{croppedLfMedia._media_id}.jpeg)"
             span.update(input=source,output=cropSource)
-        except:
+        except Exception as e:
+            print(e)
             print("could not crop image")
             print(promptJson)
             span.update(input=media,output="error occurred")

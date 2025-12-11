@@ -10,10 +10,7 @@ base_URL = os.getenv("LANGFUSE_BASE_URL")
 public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
 secret_key = os.getenv("LANGFUSE_SECRET_KEY")
 
-print(base_URL)
- 
 file_path = "img/abba-cropped.jpg"
- 
 with open(file_path, "rb") as f:
     content_bytes = f.read()
  
