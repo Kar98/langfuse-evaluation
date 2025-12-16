@@ -5,22 +5,14 @@ from google import genai
 from google.genai.errors import APIError
 from langfuse import Langfuse, get_client, observe
 from google.genai import types
+from funcs import init
 
-# --- Configuration ---
-# Set your API key as an environment variable (e.g., GEMINI_API_KEY or GOOGLE_API_KEY).
-# NOTE: Do NOT hardcode your API key directly in this file for production use.
-MODEL_NAME = "gemini-2.5-flash"
-
-# --- Langfuse Configuration ---
-# IMPORTANT: You must set these environment variables for Langfuse to work:
-# LANGFUSE_PUBLIC_KEY
-# LANGFUSE_SECRET_KEY
-# LANGFUSE_HOST (Optional, defaults to https://cloud.langfuse.com)
-LANGFUSE_HOST = "http://localhost:3000"
-
+baseurl, pubkey, secret = init()
+print("get client")
 langfuse = get_client()
  
 # Verify connection, do not use in production as this is a synchronous call
+print("auth check")
 if langfuse.auth_check():
     print("Langfuse client is authenticated and ready!")
 else:
@@ -47,10 +39,6 @@ def main():
     except Exception as e:
         print(f"ERROR: Could not initialize Gemini client. Details: {e}")
         sys.exit(1)
-
-    # 3. Initialize Langfuse
-    
-    print(f"Model: {MODEL_NAME}")
     
     # 4. Get user prompt
     print("\n----------------------------------------------------")
@@ -72,7 +60,7 @@ def main():
     media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
     try:
         response = client.models.generate_content(
-            model=MODEL_NAME,
+            model="gemini-2.5-flash",
             contents=[types.Part.from_bytes(data=image_bytes,mime_type='image/jpeg'), "Which band is this?"],
         )
         
