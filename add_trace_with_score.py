@@ -4,7 +4,7 @@ import base64
 import json
 import requests
 from google import genai
-from langfuse import get_client, Langfuse
+from langfuse import get_client, Langfuse, observe
 from langfuse.media import LangfuseMedia
 from google.genai import types
 from PIL import Image
@@ -20,7 +20,7 @@ def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
-#unused
+
 def promptWithImage(image_bytes):
     client = genai.Client()
     response = client.models.generate_content(
@@ -34,12 +34,12 @@ def promptWithImage(image_bytes):
     return response
 
 # Adds a trace to the queue and returns the ID
-def addToQueue(queueId, traceId: str):
+def addToQueue(queueId, objectId: str):
     url = f"{baseurl}/api/public/annotation-queues/{queueId}/items"
 
     payload = json.dumps({
-    "objectId": traceId,
-    "objectType": "TRACE",
+    "objectId": objectId,
+    "objectType": "OBSERVATION",
     "status": "PENDING"
     })
     headers = {
@@ -62,22 +62,36 @@ def main():
     else:
         print("Authentication failed. Please check your credentials and host.")
         sys.exit(1)
+
     
-    with langfuse.start_as_current_observation(as_type="span", name="image-crop") as span:    
+    with langfuse.start_as_current_observation(as_type="generation", name="image-crop") as obvs:
         with open(imgFilepath, 'rb') as f:
             image_bytes = f.read()
 
         media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
-
         # using alt text will make it be able to be loaded inline
         source = f"![image](https://storage.googleapis.com/{bucketId}/media/{projectId}/{media._media_id}.jpeg)"
         
         # Send image prompt
         # left: int top: int right: int bottom: int
         promptRes = promptWithImage(image_bytes)
+        # Assume 1 token == 0.1 cents
+        inputCost = 0.001 * promptRes.usage_metadata.prompt_token_count
+        outputCost = 0.001 * promptRes.usage_metadata.candidates_token_count
+        obvs.update(
+            model="gemini-2.5-flash", 
+            usage_details={
+                "input": promptRes.usage_metadata.prompt_token_count, 
+                "output": promptRes.usage_metadata.candidates_token_count
+                },
+            cost_details={
+                "input": inputCost,
+                "output": outputCost,
+                "total":inputCost + outputCost, # Set this otherwise langfuse does terrible rounding in the dashboard when it calculates the totals
+            })
         print(promptRes.text)
         try:
-            #trim
+            #trim out JSON info
             start = promptRes.text.find("{")
             end = promptRes.text.find("}")+1
             trimmed = promptRes.text[start:end]
@@ -88,30 +102,27 @@ def main():
             top = promptJson["top"]
             right = promptJson["right"]
             bottom = promptJson["bottom"]
-            #Image.frombytes()
             img = Image.open(imgFilepath)
             croppedImg = img.crop((left, top, right, bottom))
             croppedName = "img/cropped.jpg"
+            # Save cropped image via langfuse media
             croppedImg.save(croppedName)
-            # with open(croppedName, 'rb') as f:
-            #     croppedImgBytes = f.read()
-            # #croppedBytes = croppedImg.tobytes()
-            # croppedLfMedia = LangfuseMedia(content_bytes=croppedImgBytes, content_type="image/jpeg")
             croppedLfMedia = uploadImage(croppedName)
             cropSource = f"![image](https://storage.googleapis.com/{bucketId}/media/{projectId}/{croppedLfMedia._media_id}.jpeg)"
-            span.update(input=source,output=cropSource)
+            obvs.update(input=source,output=cropSource)
         except Exception as e:
             print(e)
             print("could not crop image")
             print(promptJson)
-            span.update(input=media,output="error occurred")
+            obvs.update(input=media,output="error occurred")
+            return "failed"
         
         
         # Add trace to the queue
         queueId = "cmiqo5ad4000pmp07hd7ewg2t"
-        addToQueue(queueId, span.trace_id)
+        addToQueue(queueId, obvs.id)
 
-    return source
+    return "success"
 
 if __name__ == "__main__":
     baseurl, pubkey, secret = init()

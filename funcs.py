@@ -28,13 +28,12 @@ def init():
     
     return baseurl, pubkey, secret
 
+# Uploads via the langfuse media API. Gets the URL via langfuse, then uploads directly to that link in GCS
 def uploadImage(filepath):
     base_URL = os.getenv("LANGFUSE_BASE_URL")
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-
-    file_path = filepath
-    with open(file_path, "rb") as f:
+    with open(filepath, "rb") as f:
         content_bytes = f.read()
     
     content_type = "image/jpeg"
@@ -70,7 +69,6 @@ def uploadImage(filepath):
             upload_url_response["uploadUrl"],
             headers={
                 "Content-Type": "image/jpeg",
-                #"x-amz-checksum-sha256": content_sha256,
             },
             data=content_bytes,
         )
