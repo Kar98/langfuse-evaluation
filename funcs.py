@@ -1,11 +1,13 @@
 import base64
 import os
+from datetime import datetime, timezone
 import requests
 import base64
 import hashlib
 import uuid
 import time
 from langfuse.media import LangfuseMedia
+from langfuse import get_client
 
 # Returns the Authorization for the APIs
 def login(pubkey, secret):
@@ -50,32 +52,46 @@ def uploadImage(filepath):
         "field": field,
     }
 
-    upload_url_request = requests.post(
+    upload_url_response = requests.post(
         f"{base_URL}/api/public/media",
         auth=(public_key or "", secret_key or ""),
         headers={"Content-Type": "application/json"},
         json=create_upload_url_body,
     )
+    if upload_url_response.status_code != 201:
+        raise RuntimeError(f"{base_URL}/api/public/media returned an error. code: {upload_url_response.status_code} text: {upload_url_response.text}")
     
-    upload_url_response = upload_url_request.json()
-    print("upload_url_response")
-    print(upload_url_response)
-
+    upload_response_json = upload_url_response.json()
     if (
-        upload_url_response["mediaId"] is not None
-        and upload_url_response["uploadUrl"] is not None
+        upload_response_json["mediaId"] is not None
+        and upload_response_json["uploadUrl"] is not None
     ):
         upload_response = requests.put(
-            upload_url_response["uploadUrl"],
+            upload_response_json["uploadUrl"],
             headers={
                 "Content-Type": "image/jpeg",
             },
             data=content_bytes,
         )
-        print('upload_response.status_code')
-        print(upload_response.status_code)
-        print('upload langfuse media')
+        if upload_response.status_code != 201:
+            raise RuntimeError(f"failed to upload to uploadUrl: {upload_response_json["uploadUrl"]} status: {upload_response.status_code} text: {upload_response.text}")
+        # Need to set the status in Langfuse object storage, otherwise it won't think it's been uploaded even though it is.
+        requests.patch(
+        f"{base_URL}/api/public/media/{upload_response_json['mediaId']}",
+        auth=(public_key or "", secret_key or ""),
+        headers={"Content-Type": "application/json"},
+        json={
+            "uploadedAt": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ'), # ISO 8601
+            "uploadHttpStatus": upload_response.status_code,
+            "uploadHttpError": upload_response.text if upload_response.status_code != 200 else None,
+        },
+        )
+        media = LangfuseMedia(content_bytes=content_bytes, content_type="image/jpeg")
+    elif upload_response_json["mediaId"] is not None:
+        # Most likely media already uploaded so pull the URL from Langfuse
+        # requests.get(f"{base_URL}/api/public/media/{upload_response_json["mediaId"]}")
         media = LangfuseMedia(content_bytes=content_bytes, content_type="image/jpeg")
     else:
-        raise RuntimeError("mediaId or uploadUrl was None")
+        raise RuntimeError("could not create LangfuseMedia object")
+    print(f"Successfully uploaded image. MediaID: {media._get_media_id}")
     return media
