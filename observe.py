@@ -25,20 +25,10 @@ def get_api_key():
 
 @observe()
 def main():
-    """Initializes the client and requests content from the Gemini API, with Langfuse tracing."""
-    print("--- Gemini API Query Tool with Langfuse Tracing ---")
-
-    # 1. Check for API Key
     if not get_api_key():
         print("ERROR: Gemini API key not found. Please set the GEMINI_API_KEY or GOOGLE_API_KEY.")
         sys.exit(1)
-
-    # 2. Initialize the Gemini Client
-    try:
-        client = genai.Client()
-    except Exception as e:
-        print(f"ERROR: Could not initialize Gemini client. Details: {e}")
-        sys.exit(1)
+    client = genai.Client()
     
     # 4. Get user prompt
     print("\n----------------------------------------------------")

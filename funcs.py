@@ -1,4 +1,6 @@
 import base64
+
+import sys
 import os
 from datetime import datetime, timezone
 import requests
@@ -95,3 +97,10 @@ def uploadImage(filepath):
         raise RuntimeError("could not create LangfuseMedia object")
     print(f"Successfully uploaded image. MediaID: {media._get_media_id}")
     return media
+
+def isLangfuseAuthenticated(langfuse):
+    if langfuse.auth_check():
+        print("Langfuse client is authenticated and ready!")
+    else:
+        print("Authentication failed. Please check your credentials and host.")
+        sys.exit(1)

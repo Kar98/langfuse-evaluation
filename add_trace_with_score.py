@@ -8,7 +8,7 @@ from langfuse import get_client, Langfuse, observe
 from langfuse.media import LangfuseMedia
 from google.genai import types
 from PIL import Image
-from funcs import login, init, uploadImage
+from funcs import login, init, uploadImage, isLangfuseAuthenticated
 
 # Set in init()
 auth = ""
@@ -34,7 +34,7 @@ def promptWithImage(image_bytes):
     return response
 
 # Adds a trace to the queue and returns the ID
-def addToQueue(queueId, objectId: str):
+def addObservationToQueue(queueId, objectId: str):
     url = f"{baseurl}/api/public/annotation-queues/{queueId}/items"
 
     payload = json.dumps({
@@ -57,12 +57,7 @@ def main():
     bucketId = "kablamo-labs-sandbox-langfuse-bucket"
     projectId = "cmip9nhcs0006pf07htpiovfd"
     imgFilepath = 'img/abba.jpg'
-    if langfuse.auth_check():
-        print("Langfuse client is authenticated and ready!")
-    else:
-        print("Authentication failed. Please check your credentials and host.")
-        sys.exit(1)
-
+    isLangfuseAuthenticated(langfuse)
     
     with langfuse.start_as_current_observation(as_type="generation", name="image-crop") as obvs:
         with open(imgFilepath, 'rb') as f:
@@ -90,6 +85,7 @@ def main():
                 "total":inputCost + outputCost, # Set this otherwise langfuse does terrible rounding in the dashboard when it calculates the totals
             })
         print(promptRes.text)
+        # Image cropping part
         try:
             #trim out JSON info
             start = promptRes.text.find("{")
@@ -120,7 +116,7 @@ def main():
         
         # Add trace to the queue
         queueId = "cmiqo5ad4000pmp07hd7ewg2t"
-        addToQueue(queueId, obvs.id)
+        addObservationToQueue(queueId, obvs.id)
 
     return "success"
 
