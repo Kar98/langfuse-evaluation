@@ -24,50 +24,20 @@ def get_api_key():
     return api_key
 
 @observe()
-def main():
+def main(media: LangfuseMedia):
     if not get_api_key():
         print("ERROR: Gemini API key not found. Please set the GEMINI_API_KEY or GOOGLE_API_KEY.")
         sys.exit(1)
     client = genai.Client()
-    
-    # 4. Get user prompt
-    print("\n----------------------------------------------------")
-    print("Enter your prompt (or press Enter to use the default prompt):")
-    
-    user_input = input("Prompt > ")
-    prompt = user_input.strip()
-    
-    print(f"\nSending prompt to model...")
-    print(f"Prompt: '{prompt}'")
-    
     generation = None
-
-    with open('img/abba.jpg', 'rb') as f:
-      image_bytes = f.read()
-
     
-    # 5. Call the Gemini API, wrapped in a Langfuse trace
-    media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
     try:
+        with open('img/abba.jpg', 'rb') as f:
+            image_bytes = f.read()
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[types.Part.from_bytes(data=image_bytes,mime_type='image/jpeg'), "Which band is this?"],
         )
-        
-
-        # 6. Display the response
-        print("\n--- Model Response ---")
-        print(response.text)
-        print("----------------------")
-
-        # 7. Update the Langfuse generation with the results and usage data
-        if generation:
-            generation.update(
-                output=response.text,
-                prompt_token_count=response.usage_metadata.prompt_token_count,
-                completion_token_count=response.usage_metadata.candidates_token_count
-            )
-
         # Optional: Print metadata
         if response.usage_metadata:
              print("\n--- Usage Metadata ---")
@@ -92,8 +62,12 @@ def main():
             langfuse.flush()
             print("Trace sent successfully to Langfuse.")
 
-    return media, response.text
+    return response.text
 
 if __name__ == "__main__":
-    main()
+    with open('img/abba.jpg', 'rb') as f:
+      image_bytes = f.read()
+
+    media = LangfuseMedia(content_bytes=image_bytes, content_type="image/jpeg")
+    main(media)
     
