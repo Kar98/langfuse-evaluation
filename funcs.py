@@ -32,8 +32,14 @@ def init():
     
     return baseurl, pubkey, secret
 
-# Uploads via the langfuse media API. Gets the URL via langfuse, then uploads directly to that link in GCS
-def uploadImage(filepath):
+def uploadImage(filepath) -> LangfuseMedia:
+    """
+    Uploads via the langfuse media API. Gets the URL via langfuse, then uploads directly to that link in GCS
+    
+    :param filepath: Filepath
+    :return: Uploaded file as a LangfuseMedia object
+    :rtype: LangfuseMedia
+    """
     base_URL = os.getenv("LANGFUSE_BASE_URL")
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
@@ -75,7 +81,7 @@ def uploadImage(filepath):
             },
             data=content_bytes,
         )
-        if upload_response.status_code != 201:
+        if upload_response.status_code != 200:
             raise RuntimeError(f"failed to upload to uploadUrl: {upload_response_json["uploadUrl"]} status: {upload_response.status_code} text: {upload_response.text}")
         # Need to set the status in Langfuse object storage, otherwise it won't think it's been uploaded even though it is.
         requests.patch(
